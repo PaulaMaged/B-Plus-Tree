@@ -1,8 +1,9 @@
+
 import java.lang.*;
 import java.util.*;
 import java.io.*;
 
-public class bplustree {
+public class bplustree<K extends Comparable<K>> {
 	int m;
 	InternalNode root;
 	LeafNode firstLeaf;
@@ -18,16 +19,16 @@ public class bplustree {
 	 * @param t: target key value of dictionary pair being searched for
 	 * @return index of the target value if found, else a negative value
 	 */
-	private int binarySearch(DictionaryPair[] dps, int numPairs, int t) {
+	private int binarySearch(DictionaryPair[] dps, int numPairs, K t) {
 		Comparator<DictionaryPair> c = new Comparator<DictionaryPair>() {
 			@Override
 			public int compare(DictionaryPair o1, DictionaryPair o2) {
-				Integer a = Integer.valueOf(o1.key);
-				Integer b = Integer.valueOf(o2.key);
+				K a = o1.key;
+				K b = o2.key;
 				return a.compareTo(b);
 			}
 		};
-		return Arrays.binarySearch(dps, 0, numPairs, new DictionaryPair(t, 0), c);
+		return Arrays.binarySearch(dps, 0, numPairs, new DictionaryPair(t, ""), c);
 	}
 
 	/**
@@ -1006,19 +1007,19 @@ public class bplustree {
 	 * so that the DictionaryPair objects can be sorted later on.
 	 */
 	public class DictionaryPair implements Comparable<DictionaryPair> {
-		int key;
-		double value;
-
+		K key;
+		String value;
+	
 		/**
 		 * Constructor
 		 * @param key: the key of the key-value pair
 		 * @param value: the value of the key-value pair
 		 */
-		public DictionaryPair(int key, double value) {
+		public DictionaryPair(K key, String value) {
 			this.key = key;
 			this.value = value;
 		}
-
+	
 		/**
 		 * This is a method that allows comparisons to take place between
 		 * DictionaryPair objects in order to sort them later on
@@ -1027,11 +1028,10 @@ public class bplustree {
 		 */
 		@Override
 		public int compareTo(DictionaryPair o) {
-			if (key == o.key) { return 0; }
-			else if (key > o.key) { return 1; }
-			else { return -1; }
+			return o.key.compareTo(o.key);
 		}
 	}
+	
 
 	public static void main(String[] args) {
 
