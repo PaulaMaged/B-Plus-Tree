@@ -1,9 +1,13 @@
 
 import java.lang.*;
 import java.util.*;
+import exceptions.*;
 import java.io.*;
 
-public class bplustree {
+
+
+@SuppressWarnings("rawtypes")
+public class bplustree implements BtreeInterface {
 	int m;
 	InternalNode root;
 	LeafNode firstLeaf;
@@ -28,7 +32,7 @@ public class bplustree {
 				return a.compareTo(b);
 			}
 		};
-		return Arrays.binarySearch(dps, 0, numPairs, new DictionaryPair(t, ""), c);
+		return Arrays.binarySearch(dps, 0, numPairs, createDictionaryPair(t, null), c);
 	}
 
 	/**
@@ -394,6 +398,27 @@ public class bplustree {
 		return halfKeys;
 	}
 
+	/**
+	 * Given a Key and Value, a new DictionaryPair is instantiated
+	 * @param key: A Key class instance to pass to DictionaryPair
+	 * @param value: A string to add to DictionaryPair
+	 * @return new DictionaryPair instance 
+	 */
+	public DictionaryPair createDictionaryPair(Key key, String value) {
+
+		ArrayList<String> valueArrayList = new ArrayList<>();
+		valueArrayList.add(value);
+		return new DictionaryPair(key, valueArrayList);
+	}
+
+	/**
+	 * @param value: A Key's value
+	 * @return new Key isntance 
+	 */
+	public <V extends Comparable<V>> Key createKey(V value) {
+		return new Key<>(value);
+	}
+
 	/*~~~~~~~~~~~~~~~~ API: DELETE, INSERT, SEARCH ~~~~~~~~~~~~~~~~*/
 
 	/**
@@ -401,138 +426,136 @@ public class bplustree {
 	 * corresponding key from the B+ tree.
 	 * @param key: an integer key that corresponds with an existing dictionary
 	 *             pair
+	 * @throws KeyNotFound 
 	 */
-	public void delete(Key key) {
+	public ArrayList<String> delete(Key key) {
 		if (isEmpty()) {
 
 			/* Flow of execution goes here when B+ tree has no dictionary pairs */
-
 			System.err.println("Invalid Delete: The B+ tree is currently empty.");
+
+		}
+		// Get leaf node and attempt to find index of key to delete
+		LeafNode ln = (this.root == null) ? this.firstLeaf : findLeafNode(key);
+		int dpIndex = binarySearch(ln.dictionary, ln.numPairs, key);
+
+
+		if (dpIndex < 0) {
+
+			/* Flow of execution goes here when key is absent in B+ tree */
+			System.err.println("Invalid Delete: Key unable to be found.");
+
+		} 
+
+		// Successfully delete the dictionary pair
+		DictionaryPair deletedDP = ln.delete(dpIndex);
+
+		// Check for deficiencies
+		if (ln.isDeficient()) {
+
+			LeafNode sibling;
+			InternalNode parent = ln.parent;
+
+			// Borrow: First, check the left sibling, then the right sibling
+			if (ln.leftSibling != null &&
+				ln.leftSibling.parent == ln.parent &&
+				ln.leftSibling.isLendable()) {
+
+				sibling = ln.leftSibling;
+				DictionaryPair borrowedDP = sibling.dictionary[sibling.numPairs - 1];
+
+				/* Insert borrowed dictionary pair, sort dictionary,
+					and delete dictionary pair from sibling */
+				ln.insert(borrowedDP);
+				sortDictionary(ln.dictionary);
+				sibling.delete(sibling.numPairs - 1);
+
+				// Update key in parent if necessary
+				int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
+				if (borrowedDP.key.compareTo(parent.keys[pointerIndex - 1]) < 0) {
+					parent.keys[pointerIndex - 1] = ln.dictionary[0].key;
+				}
+
+			} else if (ln.rightSibling != null &&
+						ln.rightSibling.parent == ln.parent &&
+						ln.rightSibling.isLendable()) {
+
+				sibling = ln.rightSibling;
+				DictionaryPair borrowedDP = sibling.dictionary[0];
+
+				/* Insert borrowed dictionary pair, sort dictionary,
+					and delete dictionary pair from sibling */
+				ln.insert(borrowedDP);
+				sibling.delete(0);
+				sortDictionary(sibling.dictionary);
+
+				// Update key in parent if necessary
+				int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
+				if (borrowedDP.key.compareTo(parent.keys[pointerIndex]) >= 0) {
+					parent.keys[pointerIndex] = sibling.dictionary[0].key;
+				}
+
+			}
+
+			// Merge: First, check the left sibling, then the right sibling
+			else if (ln.leftSibling != null &&
+						ln.leftSibling.parent == ln.parent &&
+						ln.leftSibling.isMergeable()) {
+
+				sibling = ln.leftSibling;
+				int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
+
+				// Remove key and child pointer from parent
+				parent.removeKey(pointerIndex - 1);
+				parent.removePointer(ln);
+
+				// Update sibling pointer
+				sibling.rightSibling = ln.rightSibling;
+
+				// Check for deficiencies in parent
+				if (parent.isDeficient()) {
+					handleDeficiency(parent);
+				}
+
+			} else if (ln.rightSibling != null &&
+						ln.rightSibling.parent == ln.parent &&
+						ln.rightSibling.isMergeable()) {
+
+				sibling = ln.rightSibling;
+				int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
+
+				// Remove key and child pointer from parent
+				parent.removeKey(pointerIndex);
+				parent.removePointer(pointerIndex);
+
+				// Update sibling pointer
+				sibling.leftSibling = ln.leftSibling;
+				if (sibling.leftSibling == null) {
+					firstLeaf = sibling;
+				}
+
+				if (parent.isDeficient()) {
+					handleDeficiency(parent);
+				}
+			}
+
+		} else if (this.root == null && this.firstLeaf.numPairs == 0) {
+
+			/* Flow of execution goes here when the deleted dictionary
+				pair was the only pair within the tree */
+
+			// Set first leaf as null to indicate B+ tree is empty
+			this.firstLeaf = null;
 
 		} else {
 
-			// Get leaf node and attempt to find index of key to delete
-			LeafNode ln = (this.root == null) ? this.firstLeaf : findLeafNode(key);
-			int dpIndex = binarySearch(ln.dictionary, ln.numPairs, key);
+			/* The dictionary of the LeafNode object may need to be
+				sorted after a successful delete */
+			sortDictionary(ln.dictionary);
 
-
-			if (dpIndex < 0) {
-
-				/* Flow of execution goes here when key is absent in B+ tree */
-
-				System.err.println("Invalid Delete: Key unable to be found.");
-
-			} else {
-
-				// Successfully delete the dictionary pair
-				ln.delete(dpIndex);
-
-				// Check for deficiencies
-				if (ln.isDeficient()) {
-
-					LeafNode sibling;
-					InternalNode parent = ln.parent;
-
-					// Borrow: First, check the left sibling, then the right sibling
-					if (ln.leftSibling != null &&
-						ln.leftSibling.parent == ln.parent &&
-						ln.leftSibling.isLendable()) {
-
-						sibling = ln.leftSibling;
-						DictionaryPair borrowedDP = sibling.dictionary[sibling.numPairs - 1];
-
-						/* Insert borrowed dictionary pair, sort dictionary,
-						   and delete dictionary pair from sibling */
-						ln.insert(borrowedDP);
-						sortDictionary(ln.dictionary);
-						sibling.delete(sibling.numPairs - 1);
-
-						// Update key in parent if necessary
-						int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
-						if (borrowedDP.key.compareTo(parent.keys[pointerIndex - 1]) < 0) {
-							parent.keys[pointerIndex - 1] = ln.dictionary[0].key;
-						}
-
-					} else if (ln.rightSibling != null &&
-							   ln.rightSibling.parent == ln.parent &&
-							   ln.rightSibling.isLendable()) {
-
-						sibling = ln.rightSibling;
-						DictionaryPair borrowedDP = sibling.dictionary[0];
-
-						/* Insert borrowed dictionary pair, sort dictionary,
-					       and delete dictionary pair from sibling */
-						ln.insert(borrowedDP);
-						sibling.delete(0);
-						sortDictionary(sibling.dictionary);
-
-						// Update key in parent if necessary
-						int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
-						if (borrowedDP.key.compareTo(parent.keys[pointerIndex]) >= 0) {
-							parent.keys[pointerIndex] = sibling.dictionary[0].key;
-						}
-
-					}
-
-					// Merge: First, check the left sibling, then the right sibling
-					else if (ln.leftSibling != null &&
-							 ln.leftSibling.parent == ln.parent &&
-							 ln.leftSibling.isMergeable()) {
-
-						sibling = ln.leftSibling;
-						int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
-
-						// Remove key and child pointer from parent
-						parent.removeKey(pointerIndex - 1);
-						parent.removePointer(ln);
-
-						// Update sibling pointer
-						sibling.rightSibling = ln.rightSibling;
-
-						// Check for deficiencies in parent
-						if (parent.isDeficient()) {
-							handleDeficiency(parent);
-						}
-
-					} else if (ln.rightSibling != null &&
-							   ln.rightSibling.parent == ln.parent &&
-							   ln.rightSibling.isMergeable()) {
-
-						sibling = ln.rightSibling;
-						int pointerIndex = findIndexOfPointer(parent.childPointers, ln);
-
-						// Remove key and child pointer from parent
-						parent.removeKey(pointerIndex);
-						parent.removePointer(pointerIndex);
-
-						// Update sibling pointer
-						sibling.leftSibling = ln.leftSibling;
-						if (sibling.leftSibling == null) {
-							firstLeaf = sibling;
-						}
-
-						if (parent.isDeficient()) {
-							handleDeficiency(parent);
-						}
-					}
-
-				} else if (this.root == null && this.firstLeaf.numPairs == 0) {
-
-					/* Flow of execution goes here when the deleted dictionary
-					   pair was the only pair within the tree */
-
-					// Set first leaf as null to indicate B+ tree is empty
-					this.firstLeaf = null;
-
-				} else {
-
-					/* The dictionary of the LeafNode object may need to be
-					   sorted after a successful delete */
-					sortDictionary(ln.dictionary);
-
-				}
-			}
 		}
+
+		return deletedDP.value;
 	}
 
 	/**
@@ -547,7 +570,10 @@ public class bplustree {
 			/* Flow of execution goes here only when first insert takes place */
 
 			// Create leaf node as first node in B plus tree (root is null)
-			LeafNode ln = new LeafNode(this.m, new DictionaryPair(key, value));
+
+			ArrayList<String> valueArrayList = new ArrayList<>();
+			valueArrayList.add(value);
+			LeafNode ln = new LeafNode(this.m, new DictionaryPair(key, valueArrayList));
 
 			// Set as first leaf node (can be used later for in-order leaf traversal)
 			this.firstLeaf = ln;
@@ -559,10 +585,10 @@ public class bplustree {
 												findLeafNode(key);
 
 			// Insert into leaf node fails if node becomes overfull
-			if (!ln.insert(new DictionaryPair(key, value))) {
+			if (!ln.insert(createDictionaryPair(key, value))) {
 
 				// Sort all the dictionary pairs with the included pair to be inserted
-				ln.dictionary[ln.numPairs] = new DictionaryPair(key, value);
+				ln.dictionary[ln.numPairs] = createDictionaryPair(key, value);
 				ln.numPairs++;
 				sortDictionary(ln.dictionary);
 
@@ -635,7 +661,7 @@ public class bplustree {
 	 * @param key: the key to be searched within the B+ tree
 	 * @return the floating point value associated with the key within the B+ tree
 	 */
-	public String search(Key key) {
+	public ArrayList<String> search(Key key) {
 
 		// If B+ tree is completely empty, simply return null
 		if (isEmpty()) { return null; }
@@ -902,14 +928,20 @@ public class bplustree {
 		 * Given an index, this method sets the dictionary pair at that index
 		 * within the dictionary to null.
 		 * @param index: the location within the dictionary to be set to null
+		 * @return DictionaryPair just deleted
 		 */
-		public void delete(int index) {
+		public DictionaryPair delete(int index) {
+
+			//get DictionaryPair
+			DictionaryPair dp = this.dictionary[index];
 
 			// Delete dictionary pair from leaf
 			this.dictionary[index] = null;
 
 			// Decrement numPairs
 			numPairs--;
+
+			return dp;
 		}
 
 		/**
@@ -981,7 +1013,7 @@ public class bplustree {
 		public LeafNode(int m, DictionaryPair dp) {
 			this.maxNumPairs = m - 1;
 			this.minNumPairs = (int)(Math.ceil(m/2) - 1);
-			this.dictionary = (DictionaryPair[]) new Object[m];
+			this.dictionary = new DictionaryPair[m];
 			this.numPairs = 0;
 			this.insert(dp);
 		}
@@ -1010,14 +1042,14 @@ public class bplustree {
 	 */
 	public class DictionaryPair implements Comparable<DictionaryPair> {
 		Key key;
-		String value;
+		ArrayList<String> value;
 	
 		/**
 		 * Constructor
 		 * @param key: the key of the key-value pair
 		 * @param value: the value of the key-value pair
 		 */
-		public DictionaryPair(Key key, String value) {
+		public DictionaryPair(Key key, ArrayList<String> value) {
 			this.key = key;
 			this.value = value;
 		}
