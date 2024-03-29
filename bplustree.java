@@ -570,10 +570,7 @@ public class bplustree implements BtreeInterface {
 			/* Flow of execution goes here only when first insert takes place */
 
 			// Create leaf node as first node in B plus tree (root is null)
-
-			ArrayList<String> valueArrayList = new ArrayList<>();
-			valueArrayList.add(value);
-			LeafNode ln = new LeafNode(this.m, new DictionaryPair(key, valueArrayList));
+			LeafNode ln = new LeafNode(this.m, createDictionaryPair(key, value));
 
 			// Set as first leaf node (can be used later for in-order leaf traversal)
 			this.firstLeaf = ln;
@@ -584,8 +581,13 @@ public class bplustree implements BtreeInterface {
 			LeafNode ln = (this.root == null) ? this.firstLeaf :
 												findLeafNode(key);
 
+			int indexOfEqualKey = binarySearch(ln.dictionary, ln.numPairs, key);
+			if(indexOfEqualKey >= 0) {
+
+				ln.dictionary[indexOfEqualKey].value.add(value);
+			}
 			// Insert into leaf node fails if node becomes overfull
-			if (!ln.insert(createDictionaryPair(key, value))) {
+			else if (!ln.insert(createDictionaryPair(key, value))) {
 
 				// Sort all the dictionary pairs with the included pair to be inserted
 				ln.dictionary[ln.numPairs] = createDictionaryPair(key, value);
