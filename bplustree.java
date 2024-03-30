@@ -6,7 +6,7 @@ import java.io.*;
 
 
 
-// @SuppressWarnings("rawtypes")
+@SuppressWarnings("rawtypes")
 public class bplustree implements BtreeInterface {
 	int m;
 	InternalNode root;
@@ -23,16 +23,9 @@ public class bplustree implements BtreeInterface {
 	 * @param t: target key value of dictionary pair being searched for
 	 * @return index of the target value if found, else a negative value
 	 */
-	private int  binarySearch(DictionaryPair[] dps, int numPairs, Key t) {
-		Comparator<DictionaryPair> c = new Comparator<DictionaryPair>() {
-			@Override
-			public int compare(DictionaryPair o1, DictionaryPair o2) {
-				Key a = o1.key;
-				Key b = o2.key;
-				return a.compareTo(b);
-			}
-		};
-		return Arrays.binarySearch(dps, 0, numPairs, createDictionaryPair(t, null), c);
+	private int  binarySearch(DictionaryPair[] dps, int numPairs, DictionaryPair dp) {
+		
+		return Arrays.binarySearch(dps, 0, numPairs, dp, null);
 	}
 
 	/**
@@ -404,11 +397,9 @@ public class bplustree implements BtreeInterface {
 	 * @param value: A string to add to DictionaryPair
 	 * @return new DictionaryPair instance 
 	 */
-	public DictionaryPair createDictionaryPair(Key key, String value) {
+	public DictionaryPair createDictionaryPair(Key key, ArrayList<String> values) {
 
-		ArrayList<String> valueArrayList = new ArrayList<>();
-		valueArrayList.add(value);
-		return new DictionaryPair(key, valueArrayList);
+		return new DictionaryPair(key, values);
 	}
 
 	/**
@@ -422,13 +413,12 @@ public class bplustree implements BtreeInterface {
 	/*~~~~~~~~~~~~~~~~ API: DELETE, INSERT, SEARCH, UPDATE ~~~~~~~~~~~~~~~~*/
 
 	/**
-	 * Given a key, this method will remove the dictionary pair with the
-	 * corresponding key from the B+ tree.
-	 * @param key: an integer key that corresponds with an existing dictionary
-	 *             pair
-	 * @throws KeyNotFound 
+	 * Given a dictionaryPair that contains a subset of values of search method.
+	 * It deletes the values within the dictionaryPair's value array 
+	 * @param dp: dictionaryPair to delete with.
 	 */
-	public ArrayList<String> delete(Key key) {
+	public ArrayList<String> delete(bplustree.DictionaryPair dp) {
+
 		if (isEmpty()) {
 
 			/* Flow of execution goes here when B+ tree has no dictionary pairs */
@@ -436,8 +426,8 @@ public class bplustree implements BtreeInterface {
 
 		}
 		// Get leaf node and attempt to find index of key to delete
-		LeafNode ln = (this.root == null) ? this.firstLeaf : findLeafNode(key);
-		int dpIndex = binarySearch(ln.dictionary, ln.numPairs, key);
+		LeafNode ln = (this.root == null) ? this.firstLeaf : findLeafNode(dp.key);
+		int dpIndex = binarySearch(ln.dictionary, ln.numPairs, dp);
 
 
 		if (dpIndex < 0) {
@@ -446,6 +436,32 @@ public class bplustree implements BtreeInterface {
 			System.err.println("Invalid Delete: Key unable to be found.");
 
 		} 
+
+
+		DictionaryPair targetDP = ln.dictionary[dpIndex];
+
+		//delete specific values for given key if dp.value is null
+		if(dp.value != null)  {
+		//PageNames to be returned by method
+		ArrayList<String> pagesHadKey = new ArrayList<>();
+		//delete relevant pages from dictionaryPair
+		for (String o : targetDP.value) {
+			int filterValue = dp.value.indexOf(o);
+			if(filterValue == -1) {
+				System.err.println("Key: " + dp.key + " does not exist in page: " + o);
+				dp.value.remove(filterValue);
+				break;
+			}
+
+			dp.value.remove(filterValue);
+			targetDP.value.remove(filterValue);
+			pagesHadKey.add(o);
+			
+			}		
+
+			if (!targetDP.value.isEmpty()) return pagesHadKey;
+
+		}
 
 		// Successfully delete the dictionary pair
 		DictionaryPair deletedDP = ln.delete(dpIndex);
@@ -564,13 +580,13 @@ public class bplustree implements BtreeInterface {
 	 * @param key: an integer key to be used in the dictionary pair
 	 * @param value: a floating point number to be used in the dictionary pair
 	 */
-	public void insert(Key key, String value){
+	public void insert(DictionaryPair dp){
 		if (isEmpty()) {
 
 			/* Flow of execution goes here only when first insert takes place */
 
 			// Create leaf node as first node in B plus tree (root is null)
-			LeafNode ln = new LeafNode(this.m, createDictionaryPair(key, value));
+			LeafNode ln = new LeafNode(this.m, dp);
 
 			// Set as first leaf node (can be used later for in-order leaf traversal)
 			this.firstLeaf = ln;
@@ -579,18 +595,18 @@ public class bplustree implements BtreeInterface {
 
 			// Find leaf node to insert into
 			LeafNode ln = (this.root == null) ? this.firstLeaf :
-												findLeafNode(key);
+												findLeafNode(dp.key);
 
-			int indexOfEqualKey = binarySearch(ln.dictionary, ln.numPairs, key);
+			int indexOfEqualKey = binarySearch(ln.dictionary, ln.numPairs, dp);
 			if(indexOfEqualKey >= 0) {
 
-				ln.dictionary[indexOfEqualKey].value.add(value);
+				ln.dictionary[indexOfEqualKey].value.addAll(dp.value);
 			}
 			// Insert into leaf node fails if node becomes overfull
-			else if (!ln.insert(createDictionaryPair(key, value))) {
+			else if (!ln.insert(dp)) {
 
 				// Sort all the dictionary pairs with the included pair to be inserted
-				ln.dictionary[ln.numPairs] = createDictionaryPair(key, value);
+				ln.dictionary[ln.numPairs] = dp;
 				ln.numPairs++;
 				sortDictionary(ln.dictionary);
 
@@ -665,19 +681,25 @@ public class bplustree implements BtreeInterface {
 	 */
 	public ArrayList<String> search(Key key) {
 
+		//Empty ArrayList if search doesn't find anything
+		ArrayList<String> returnEmpty = new ArrayList<>();
 		// If B+ tree is completely empty, simply return null
-		if (isEmpty()) { return null; }
+		if (isEmpty()) { 
+			System.err.println("This key doesn't exist");
+			return returnEmpty; 
+		}
 
 		// Find leaf node that holds the dictionary key
 		LeafNode ln = (this.root == null) ? this.firstLeaf : findLeafNode(key);
 
 		// Perform binary search to find index of key within dictionary
 		DictionaryPair[] dps = ln.dictionary;
-		int index = binarySearch(dps, ln.numPairs, key);
+		int index = binarySearch(dps, ln.numPairs, createDictionaryPair(key, null));
 
 		// If index negative, the key doesn't exist in B+ tree
 		if (index < 0) {
-			return null;
+			System.err.println("This key doesn't exist");
+			return returnEmpty; 
 		} else {
 			return dps[index].value;
 		}
@@ -722,6 +744,17 @@ public class bplustree implements BtreeInterface {
 		}
 
 		return values;
+	}
+
+	/**
+	 * This method takes a DictionaryPair and map the values to another key
+	 * @param oldDP: The dictionaryPair of key and specific pages that are to be changed
+	 */
+	public void update(bplustree.DictionaryPair oldDP, Key newKey) {
+		
+		ArrayList<String> values = this.delete(oldDP);
+
+		this.insert(createDictionaryPair(newKey, values));
 	}
 
 	/**
@@ -1063,7 +1096,7 @@ public class bplustree implements BtreeInterface {
 		 */
 		@Override
 		public int compareTo(DictionaryPair o) {
-			return o.key.compareTo(o.key);
+			return this.key.compareTo(o.key);
 		}
 	}
 	

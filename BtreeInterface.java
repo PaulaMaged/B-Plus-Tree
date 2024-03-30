@@ -1,16 +1,14 @@
 import java.util.ArrayList;
 
-import exceptions.KeyNotFound;
-
 public interface BtreeInterface {
 
-    public void insert(Key key, String pageName);
+    public void insert(bplustree.DictionaryPair dp);
 
     public ArrayList<String> search(Key key); 
 
-    // public ArrayList<String> search(Key lowerbound, Key upperbound);
+    public ArrayList<String> search(Key lowerbound, Key upperbound);
 
-    public ArrayList<String> delete(Key key);
+    public ArrayList<String> delete(bplustree.DictionaryPair dp);
 
-    // ArrayList<String> update(Key oldKey, Key newKey);
+    public void update(bplustree.DictionaryPair oldDP, Key newkey);
 }
