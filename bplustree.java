@@ -6,7 +6,7 @@ import java.io.*;
 
 
 
-@SuppressWarnings("rawtypes")
+// @SuppressWarnings("rawtypes")
 public class bplustree implements BtreeInterface {
 	int m;
 	InternalNode root;
@@ -419,7 +419,7 @@ public class bplustree implements BtreeInterface {
 		return new Key<>(value);
 	}
 
-	/*~~~~~~~~~~~~~~~~ API: DELETE, INSERT, SEARCH ~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~ API: DELETE, INSERT, SEARCH, UPDATE ~~~~~~~~~~~~~~~~*/
 
 	/**
 	 * Given a key, this method will remove the dictionary pair with the
@@ -692,38 +692,37 @@ public class bplustree implements BtreeInterface {
 	 * @return an ArrayList<Double> that holds all values of dictionary pairs
 	 * whose keys are within the specified range
 	 */
-	// public ArrayList<String> search(Key lowerBound, Key upperBound) {
+	public ArrayList<String> search(Key lowerBound, Key upperBound) {
 
-	// 	// Instantiate Double array to hold values
-	// 	ArrayList<String> values = new ArrayList<String>();
+		// Instantiate Double array to hold values
+		ArrayList<String> values = new ArrayList<String>();
 
-	// 	// Iterate through the doubly linked list of leaves
-	// 	LeafNode currNode = this.firstLeaf;
-	// 	while (currNode != null) {
+		// Iterate through the doubly linked list of leaves
+		LeafNode currNode = this.firstLeaf;
+		while (currNode != null) {
 
-	// 		// Iterate through the dictionary of each node
-	// 		DictionaryPair dps[] = currNode.dictionary;
-	// 		for (DictionaryPair dp : dps) {
+			// Iterate through the dictionary of each node
+			DictionaryPair dps[] = currNode.dictionary;
+			for (DictionaryPair dp : dps) {
 
-	// 			/* Stop searching the dictionary once a null value is encountered
-	// 			   as this the indicates the end of non-null values */
-	// 			if (dp == null) { break; }
+				/* Stop searching the dictionary once a null value is encountered
+				   as this the indicates the end of non-null values */
+				if (dp == null) { break; }
 
-	// 			// Include value if its key fits within the provided range
-	// 			// if (lowerBound <= dp.key && dp.key <= upperBound) {
-	// 			// 	values.add(dp.value);
-	// 			// }
-	// 			if ( )
-	// 		}
+				// Include value if its key fits within the provided range
+				if ((dp.key.compareTo(lowerBound) >= 0) && (dp.key.compareTo(upperBound) <= 0)) {
+					values.addAll(dp.value);
+				}
+			}
 
-	// 		/* Update the current node to be the right sibling,
-	// 		   leaf traversal is from left to right */
-	// 		currNode = currNode.rightSibling;
+			/* Update the current node to be the right sibling,
+				leaf traversal is from left to right */
+			currNode = currNode.rightSibling;
 
-	// 	}
+		}
 
-	// 	return values;
-	// }
+		return values;
+	}
 
 	/**
 	 * Constructor
